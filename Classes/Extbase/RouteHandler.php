@@ -29,6 +29,7 @@ namespace LMS\Routes\Extbase;
  * ************************************************************* */
 
 use LMS\Routes\Support\Response;
+use TYPO3\CMS\Core\Routing\PageArguments;
 use TYPO3\CMS\Extbase\Core\Bootstrap;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Http\PropagateResponseException;
@@ -38,6 +39,7 @@ use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 use Psr\Http\{Message\ResponseInterface, Message\ServerRequestInterface};
 use LMS\Routes\{Domain\Model\Middleware, Domain\Model\Route, Service\RouteService};
+use TYPO3\CMS\Extbase\Service\ExtensionService;
 
 /**
  * @author Sergey Borulko <borulkosergey@icloud.com>
@@ -102,17 +104,22 @@ class RouteHandler
         $GLOBALS['TSFE']->set_no_cache();
         $GLOBALS['TSFE']->determineId($request);
         $GLOBALS['TSFE']->getConfigArray();
+        $extensionService = GeneralUtility::makeInstance(ExtensionService::class);
+        $pluginNamespace = $extensionService->getPluginNamespace($route->getController()->getExtension(), $route->getPlugin());
 
+        $request = $request->withQueryParams([$pluginNamespace => $route->getArguments()])->withoutAttribute('routing');
         $this->processMiddleware(
-            $request->withQueryParams($route->getArguments())
+            $request
         );
 
         $this->createActionArgumentsFrom($route);
 
+        $GLOBALS['TYPO3_REQUEST'] = $GLOBALS['TYPO3_REQUEST']->withoutAttribute('routing');
+
         $this->bootstrap([
             'pluginName' => $route->getPlugin(),
             'vendorName' => $route->getController()->getVendor(),
-            'extensionName' => $route->getController()->getExtension()
+            'extensionName' => $route->getController()->getExtension(),
         ]);
     }
 
@@ -171,8 +178,8 @@ class RouteHandler
      *
      * @param array<string, string> $config
      */
-    private function bootstrap(array $config): void
+    private function bootstrap(array $config, ?ServerRequestInterface $request = null): void
     {
-        $this->output = $this->bootstrap->run('', $config);
+        $this->output = $this->bootstrap->run('', $config, $request);
     }
 }
